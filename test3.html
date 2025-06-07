@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>영단어 맞추기 시험</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+  #start, #quiz, #result { display: none; }
+  label { display: block; margin-top: 10px; }
+  input[type=text] { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+  button { margin-top: 15px; padding: 10px 20px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  th { background: #eee; }
+  .correct { color: green; }
+  .incorrect { color: red; }
+</style>
+</head>
+<body>
+
+<h1>영단어 맞추기 시험</h1>
+
+<div id="start">
+  <label for="username">이름을 입력하세요:</label>
+  <input type="text" id="username" placeholder="이름 입력" />
+  <button id="startBtn">시험 시작</button>
+</div>
+
+<div id="quiz">
+  <p><strong>문제 <span id="currentNum">1</span> / 20</strong></p>
+  <p>뜻: <span id="meaning"></span></p>
+  <label for="answerInput">영단어를 입력하세요:</label>
+  <input type="text" id="answerInput" autocomplete="off" />
+  <button id="nextBtn">다음</button>
+</div>
+
+<div id="result">
+  <h2>시험 결과</h2>
+  <p id="score"></p>
+  <table>
+    <thead>
+      <tr>
+        <th>뜻</th>
+        <th>내 답</th>
+        <th>정답</th>
+      </tr>
+    </thead>
+    <tbody id="resultTableBody"></tbody>
+  </table>
+  <button id="restartBtn">다시 하기</button>
+</div>
+
+<script>
+  const SPREADSHEET_JSON_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSvfwskbd6n9YD4u37ZVBk8hnRirhoUdGpb_q8JKkbv4_XqtDZbRfJ0TJdNJfNeOOQ869YulCDoQqBY/gviz/tq?tqx=out:json';
+
+  let wordList = []; // {word: '', meaning: ''}
+  let quizSet = [];
+  let currentIndex = 0;
+  let userAnswers = [];
+  let username = '';
+
+  const startDiv = document.getElementById('start');
+  const quizDiv = document.getElementById('quiz');
+  const resultDiv = document.getElementById('result');
+
+  const usernameInput = document.getElementById('username');
+  const startBtn = document.getElementById('startBtn');
+
+  const meaningSpan = document.getElementById('meaning');
+  const answerInput = document.getElementById('answerInput');
+  const nextBtn = document.getElementById('nextBtn');
+  const currentNumSpan = document.getElementById('currentNum');
+
+  const scoreP = document.getElementById('score');
+  const resultTableBody = document.getElementById('resultTableBody');
+  const restartBtn = document.getElementById('restartBtn');
+
+  function fetchSheetJSON() {
+    return fetch(SPREADSHEET_JSON_URL)
+      .then(res => res.text())
+      .then(data => {
+        // JSON 앞뒤 불필요한 텍스트 제거
+        const jsonStr = data.substring(data.indexOf('{'), data.lastIndexOf('}') + 1);
+        const json = JSON.parse(jsonStr);
+
+        const rows = json.table.rows;
+        wordList = rows.map(row => {
+          const word = row.c[0]?.v || '';
+          const meaning = row.c[1]?.v || '';
+          return {word, meaning};
+        });
+      });
+  }
+
+  function shuffleArray(arr) {
+    for(let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+
+  function startQuiz() {
+    username = usernameInput.value.trim();
+    if (!username) {
+      alert('이름을 입력하세요.');
+      return;
+    }
+
+    shuffleArray(wordList);
+    quizSet = wordList.slice(0, 20);
+    currentIndex = 0;
+    userAnswers = [];
+
+    startDiv.style.display = 'none';
+    resultDiv.style.display = 'none';
+    quizDiv.style.display = 'block';
+
+    showQuestion();
+  }
+
+  function showQuestion() {
+    currentNumSpan.textContent = currentIndex + 1;
+    meaningSpan.textContent = quizSet[currentIndex].meaning;
+    answerInput.value = '';
+    answerInput.focus();
+    if(currentIndex === 19) {
+      nextBtn.textContent = '시험 종료';
+    } else {
+      nextBtn.textContent = '다음';
+    }
+  }
+
+  function nextQuestion() {
+    const answer = answerInput.value.trim();
+    if (!answer) {
+      alert('답을 입력하세요.');
+      return;
+    }
+
+    userAnswers.push(answer);
+
+    currentIndex++;
+    if (currentIndex >= quizSet.length) {
+      showResult();
+    } else {
+      showQuestion();
+    }
+  }
+
+  function showResult() {
+    quizDiv.style.display = 'none';
+    resultDiv.style.display = 'block';
+
+    let correctCount = 0;
+    resultTableBody.innerHTML = '';
+
+    quizSet.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      const meaningTd = document.createElement('td');
+      meaningTd.textContent = item.meaning;
+      const userTd = document.createElement('td');
+      userTd.textContent = userAnswers[idx];
+      const correctTd = document.createElement('td');
+      correctTd.textContent = item.word;
+
+      if(userAnswers[idx].toLowerCase() === item.word.toLowerCase()) {
+        correctCount++;
+        userTd.classList.add('correct');
+      } else {
+        userTd.classList.add('incorrect');
+      }
+
+      tr.appendChild(meaningTd);
+      tr.appendChild(userTd);
+      tr.appendChild(correctTd);
+      resultTableBody.appendChild(tr);
+    });
+
+    scoreP.textContent = `${username}님의 점수: ${correctCount} / ${quizSet.length}`;
+  }
+
+  function restart() {
+    usernameInput.value = '';
+    startDiv.style.display = 'block';
+    quizDiv.style.display = 'none';
+    resultDiv.style.display = 'none';
+    usernameInput.focus();
+  }
+
+  startBtn.addEventListener('click', startQuiz);
+  nextBtn.addEventListener('click', nextQuestion);
+  restartBtn.addEventListener('click', restart);
+
+  fetchSheetJSON().then(() => {
+    startDiv.style.display = 'block';
+    usernameInput.focus();
+  }).catch(err => {
+    alert('단어 리스트를 불러오는 데 실패했습니다.');
+    console.error(err);
+  });
+</script>
+
+</body>
+</html>
